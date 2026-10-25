@@ -82,4 +82,24 @@ def get_recent_security_events(account_number: str) -> str:
     return json.dumps({"found": True, "events": acct["recent_security_events"]})
 
 
-TRIAGE_TOOLS = [lookup_account_profile, get_recent_security_events]
+@tool
+def get_account_number_from_message(message: str) -> str:
+    """Extract an account number from a message, if present.
+
+    Returns the account number as a string, or an empty string if none is found.
+    """
+    import re
+
+    match = re.search(r"\b\d{10}\b", message)
+    acct_num = match.group(0) if match else ""
+    logger.debug("get_account_number_from_message found=%s", bool(acct_num))
+    return acct_num
+
+@tool
+def dummy_tool_call_for_testing(message: str) -> str:
+    """A dummy tool call for testing purposes."""
+    logger.debug("dummy_tool_call_for_testing called with message: %s", message)
+    return f"Test result for message: {message}"
+
+TRIAGE_TOOLS = [lookup_account_profile, get_recent_security_events, get_account_number_from_message, dummy_tool_call_for_testing]
+
