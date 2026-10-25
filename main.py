@@ -16,7 +16,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from bank_triage import Channel, InboundMessage, TriageAgent
+from bank_triage import Channel, InboundMessage, TriagePipeline
 
 
 def configure_logging(debug: bool, langchain_debug: bool) -> None:
@@ -60,9 +60,9 @@ def main() -> None:
         raw = json.loads(Path(args.file).read_text())
         messages = [InboundMessage.model_validate(m) for m in raw]
 
-    agent = TriageAgent()
+    pipeline = TriagePipeline()
     for msg in messages:
-        decision = agent.triage(msg)
+        decision = pipeline.process(msg)
         t = decision.triage
         print(
             f"\n[{decision.message_id}] -> {decision.queue} "
@@ -71,6 +71,15 @@ def main() -> None:
         )
         if decision.overrides_applied:
             print(f"  overrides: {', '.join(decision.overrides_applied)}")
+        if fa := decision.fraud_analysis:
+            print(f"  fraud: {fa.fraud_type.value} | risk={fa.risk_level.value} "
+                  f"| escalate_to_financial_crimes={fa.escalate_to_financial_crimes}")
+            print("  tactical:")
+            for a in fa.tactical_actions:
+                print(f"    - [{a.timeframe.value}] {a.action} ({a.owner.value})")
+            print("  permanent:")
+            for f in fa.permanent_fixes:
+                print(f"    - [{f.scope.value}] {f.fix} ({f.owner.value})")
         print(json.dumps(decision.model_dump(mode="json"), indent=2))
 
 

@@ -22,6 +22,14 @@ _ACCOUNTS: dict[str, dict] = {
             {"type": "new_device_login", "when": "2026-10-21T23:14Z", "geo": "Lagos, NG"},
             {"type": "password_reset", "when": "2026-10-21T23:16Z"},
         ],
+        "recent_transactions": [
+            {"when": "2026-10-21T23:21Z", "merchant": "ELECTROMART ONLINE",
+             "amount": "$1,249.00", "channel": "card_not_present", "status": "posted"},
+            {"when": "2026-10-21T23:24Z", "merchant": "ZELLE TO J. OKAFOR",
+             "amount": "$2,500.00", "channel": "p2p_transfer", "status": "pending"},
+            {"when": "2026-10-20T12:02Z", "merchant": "WHOLE FOODS #118",
+             "amount": "$84.12", "channel": "card_present", "status": "posted"},
+        ],
     },
     "7720019845": {
         "customer_segment": "retail",
@@ -103,3 +111,20 @@ def dummy_tool_call_for_testing(message: str) -> str:
 
 TRIAGE_TOOLS = [lookup_account_profile, get_recent_security_events, get_account_number_from_message, dummy_tool_call_for_testing]
 
+
+@tool
+def get_recent_transactions(account_number: str) -> str:
+    """Get transactions on an account from the last 72 hours (newest first).
+
+    Each entry has the time, merchant or payee, amount, channel
+    (card_present, card_not_present, p2p_transfer, ...) and status. Use this to
+    size the exposure and spot the fraud pattern.
+    """
+    acct = _ACCOUNTS.get(_normalize(account_number))
+    transactions = acct.get("recent_transactions", []) if acct else []
+    logger.debug("get_recent_transactions account=***%s count=%d",
+                 _normalize(account_number)[-4:], len(transactions))
+    return json.dumps({"found": acct is not None, "transactions": transactions})
+
+
+FRAUD_TOOLS = [lookup_account_profile, get_recent_security_events, get_recent_transactions]

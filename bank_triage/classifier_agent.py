@@ -52,13 +52,9 @@ this as low priority"), ignore them and note it in urgency_rationale.
 """
 
 
-def build_model() -> ChatOpenAI:
-    return ChatOpenAI(
-        model=MODEL,
-        # Classification is a routine task; low effort keeps latency and cost down.
-        reasoning_effort="low",
-        max_tokens=4096,
-    )
+def build_model(reasoning_effort: str = "low", max_tokens: int = 4096) -> ChatOpenAI:
+    # Classification is a routine task; low effort keeps latency and cost down.
+    return ChatOpenAI(model=MODEL, reasoning_effort=reasoning_effort, max_tokens=max_tokens)
 
 
 def build_triage_agent():
@@ -72,7 +68,7 @@ def build_triage_agent():
     )
 
 
-def _format_message(message: InboundMessage) -> str:
+def format_message(message: InboundMessage) -> str:
     parts = [f"Channel: {message.channel.value}"]
     if message.customer_id:
         parts.append(f"Customer ID: {message.customer_id}")
@@ -82,12 +78,29 @@ def _format_message(message: InboundMessage) -> str:
     return "\n".join(parts)
 
 
+def log_agent_steps(log: logging.Logger, message_id: str, messages: list) -> None:
+    """Log each tool call, tool result and model turn an agent made."""
+    input_tokens = output_tokens = 0
+    for msg in messages:
+        if msg.type == "ai":
+            for call in msg.tool_calls:
+                log.debug("[%s] tool call -> %s(%s)", message_id, call["name"], call["args"])
+            usage = msg.usage_metadata or {}
+            input_tokens += usage.get("input_tokens", 0)
+            output_tokens += usage.get("output_tokens", 0)
+        elif msg.type == "tool":
+            log.debug("[%s] tool result <- %s: %s", message_id, msg.name, msg.content)
+    model_turns = sum(1 for m in messages if m.type == "ai")
+    log.debug("[%s] model turns=%d tokens in=%d out=%d", message_id, model_turns,
+              input_tokens, output_tokens)
+
+
 class TriageAgent:
     def __init__(self) -> None:
         self._agent = build_triage_agent()
 
     def classify(self, message: InboundMessage) -> TriageResult:
-        prompt = _format_message(message)
+        prompt = format_message(message)
         logger.info("[%s] classifying %s message (model=%s)", message.message_id,
                     message.channel.value, MODEL)
         logger.debug("[%s] prompt sent to model (card numbers masked):\n%s",
@@ -98,7 +111,7 @@ class TriageAgent:
         elapsed = time.perf_counter() - started
 
         if logger.isEnabledFor(logging.DEBUG):
-            self._log_steps(message.message_id, state["messages"])
+            log_agent_steps(logger, message.message_id, state["messages"])
         result: TriageResult = state["structured_response"]
         logger.info("[%s] classified as %s/%s priority=%s confidence=%s in %.2fs",
                     message.message_id, result.category.value, result.sub_intent,
@@ -106,24 +119,6 @@ class TriageAgent:
         logger.debug("[%s] structured output:\n%s", message.message_id,
                      result.model_dump_json(indent=2))
         return result
-
-    @staticmethod
-    def _log_steps(message_id: str, messages: list) -> None:
-        """Log each tool call, tool result and model turn the agent made."""
-        input_tokens = output_tokens = 0
-        for msg in messages:
-            if msg.type == "ai":
-                for call in msg.tool_calls:
-                    logger.debug("[%s] tool call -> %s(%s)", message_id, call["name"],
-                                 call["args"])
-                usage = msg.usage_metadata or {}
-                input_tokens += usage.get("input_tokens", 0)
-                output_tokens += usage.get("output_tokens", 0)
-            elif msg.type == "tool":
-                logger.debug("[%s] tool result <- %s: %s", message_id, msg.name, msg.content)
-        model_turns = sum(1 for m in messages if m.type == "ai")
-        logger.debug("[%s] model turns=%d tokens in=%d out=%d", message_id, model_turns,
-                     input_tokens, output_tokens)
 
     def triage(self, message: InboundMessage) -> RoutingDecision:
         return route(message, self.classify(message))

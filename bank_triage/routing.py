@@ -28,6 +28,7 @@ QUEUES: dict[Category, str] = {
     Category.GENERAL_INQUIRY: "general-inquiries",
 }
 MANUAL_REVIEW_QUEUE = "triage-manual-review"
+FRAUD_QUEUE = QUEUES[Category.FRAUD_SECURITY]
 
 # Allowed priority band per category (the use case's stated policy).
 PRIORITY_BANDS: dict[Category, set[Priority]] = {

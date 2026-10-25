@@ -188,3 +188,107 @@ class RoutingDecision(BaseModel):
     sla_minutes: int
     overrides_applied: list[str]
     triage: TriageResult
+    # Filled in by the fraud agent for messages routed to the fraud queue.
+    fraud_analysis: FraudAnalysis | None = None
+
+
+# --------------------------------------------------------------------------- #
+# Fraud analysis (second-stage agent, fraud-ops queue only)
+# --------------------------------------------------------------------------- #
+class FraudType(str, Enum):
+    ACCOUNT_TAKEOVER = "account_takeover"
+    CARD_NOT_PRESENT = "card_not_present"
+    LOST_STOLEN_CARD = "lost_stolen_card"
+    CARD_SKIMMING_COUNTERFEIT = "card_skimming_counterfeit"
+    PHISHING_SOCIAL_ENGINEERING = "phishing_social_engineering"
+    AUTHORIZED_PUSH_PAYMENT_SCAM = "authorized_push_payment_scam"
+    IDENTITY_THEFT = "identity_theft"
+    SIM_SWAP = "sim_swap"
+    ELDER_FINANCIAL_ABUSE = "elder_financial_abuse"
+    FRIENDLY_FRAUD = "friendly_fraud"
+    UNDETERMINED = "undetermined"
+
+
+class RiskLevel(str, Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class ActionOwner(str, Enum):
+    FRAUD_OPS = "fraud_ops"
+    CARD_SERVICES = "card_services"
+    DIGITAL_BANKING = "digital_banking"
+    CYBER_SECURITY = "cyber_security"
+    FINANCIAL_CRIMES = "financial_crimes"
+    CUSTOMER = "customer"
+
+
+class Timeframe(str, Enum):
+    IMMEDIATE = "immediate"
+    WITHIN_1_HOUR = "within_1_hour"
+    WITHIN_24_HOURS = "within_24_hours"
+
+
+class FixScope(str, Enum):
+    CUSTOMER_ACCOUNT = "customer_account"
+    BANK_CONTROL = "bank_control"
+    PRODUCT_OR_PROCESS = "product_or_process"
+
+
+class TacticalAction(OpenAIStrictModel):
+    """A containment step that stops the loss now."""
+
+    action: str = Field(description="Concrete step, e.g. 'Block card ending 0366'.")
+    owner: ActionOwner
+    timeframe: Timeframe
+    rationale: str = Field(description="Why this step, tied to the evidence.")
+
+
+class PermanentFix(OpenAIStrictModel):
+    """A remediation that removes the root cause so this can't recur."""
+
+    fix: str = Field(description="Concrete remediation, e.g. 'Enforce phishing-resistant MFA'.")
+    owner: ActionOwner
+    scope: FixScope
+    root_cause_addressed: str = Field(description="The weakness this fix closes.")
+
+
+class FraudAnalysis(OpenAIStrictModel):
+    """Fraud analyst's assessment of one fraud_security case."""
+
+    fraud_type: FraudType = Field(description="Most likely fraud typology.")
+    secondary_fraud_types: list[FraudType] = Field(
+        description="Other typologies that may also be in play (e.g. phishing leading to ATO)."
+    )
+    attack_vector: str = Field(
+        description="How the fraudster most likely got access, in one or two sentences."
+    )
+    evidence: list[str] = Field(
+        description="Facts from the message and tool results that support the typology."
+    )
+    estimated_exposure: str | None = Field(
+        description="Amount at risk or already lost with currency, or null if unknown."
+    )
+    risk_level: RiskLevel
+    confidence: Confidence
+    tactical_actions: list[TacticalAction] = Field(
+        description="Containment steps in the order they should happen."
+    )
+    permanent_fixes: list[PermanentFix] = Field(
+        description="Root-cause remediations for the account and, where relevant, the bank."
+    )
+    customer_guidance: list[str] = Field(
+        description="Plain-language steps the analyst should tell the customer to take."
+    )
+    escalate_to_financial_crimes: bool = Field(
+        description="True for organised/repeat patterns, large exposure, or SAR-worthy activity."
+    )
+    regulatory_considerations: list[str] = Field(
+        description="Dispute/chargeback deadlines, SAR filing, vulnerable-customer duties, etc."
+    )
+    analyst_summary: str = Field(description="Two or three sentences for the case file.")
+
+
+RoutingDecision.model_rebuild()
