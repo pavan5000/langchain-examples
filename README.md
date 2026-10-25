@@ -14,7 +14,7 @@ message ──► mask card PANs ──► LangChain agent (OpenAI + tools) ─�
 | File | Purpose |
 |---|---|
 | `bank_triage/schemas.py` | Pydantic models: `InboundMessage`, `TriageResult` (the structured output), `RoutingDecision` |
-| `bank_triage/agent.py` | `create_agent` + `ProviderStrategy(TriageResult)`, which uses OpenAI's native structured outputs |
+| `bank_triage/classifier_agent.py` | `create_agent` + `ProviderStrategy(TriageResult)`, which uses OpenAI's native structured outputs |
 | `bank_triage/tools.py` | `lookup_account_profile`, `get_recent_security_events` (mock data; replace with real services) |
 | `bank_triage/routing.py` | Queue map, priority policy, SLAs, manual-review fallback, PAN masking |
 

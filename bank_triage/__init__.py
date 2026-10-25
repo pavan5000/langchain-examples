@@ -1,4 +1,4 @@
-from .agent import TriageAgent
+from .classifier_agent import TriageAgent
 from .routing import route
 from .schemas import Channel, InboundMessage, RoutingDecision, TriageResult
 
